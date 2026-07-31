@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Day 18 — Marketing Attribution & Budget Optimizer</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<style>
+  body { font-family: -apple-system, Segoe UI, Roboto, sans-serif; margin: 24px; background: #f7f8fa; color: #1a1a1a; }
+  h1 { font-size: 22px; margin-bottom: 4px; }
+  .sub { color: #666; margin-bottom: 20px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .card { background: white; border-radius: 10px; padding: 16px 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+  .card h2 { font-size: 15px; margin: 0 0 12px; color: #333; }
+  button { background: #2563eb; color: white; border: none; padding: 9px 16px; border-radius: 6px; cursor: pointer; font-size: 14px; }
+  button:hover { background: #1d4ed8; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  td, th { padding: 6px 8px; text-align: right; border-bottom: 1px solid #eee; }
+  th:first-child, td:first-child { text-align: left; }
+  .narrative { font-size: 14px; line-height: 1.5; color: #333; }
+  .full { grid-column: 1 / -1; }
+  #status { color: #666; font-size: 13px; margin-left: 10px; }
+</style>
+</head>
+<body>
+  <h1>Day 18 — Marketing Attribution &amp; Budget Optimization Engine</h1>
+  <div class="sub">Multi-touch attribution (5 models) + water-filling budget optimizer + Monte Carlo scenario simulation</div>
+
+  <div class="card full" style="margin-bottom:20px;">
+    <button onclick="runPipeline()">Run pipeline</button>
+    <span id="status"></span>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <h2>Attributed conversions by channel &amp; model</h2>
+      <canvas id="attrChart" height="220"></canvas>
+    </div>
+    <div class="card">
+      <h2>Budget: current vs. recommended</h2>
+      <canvas id="budgetChart" height="220"></canvas>
+    </div>
+    <div class="card full">
+      <h2>Scenario simulation (uncertainty in channel response rate)</h2>
+      <table id="scenarioTable"><thead><tr><th>Scenario</th><th>P10</th><th>Median</th><th>Mean</th><th>P90</th></tr></thead><tbody></tbody></table>
+    </div>
+    <div class="card full">
+      <h2>Narrative summary</h2>
+      <div class="narrative" id="narrative">Run the pipeline to generate a summary.</div>
+    </div>
+    <div class="card full">
+      <h2>Run history</h2>
+      <table id="runsTable"><thead><tr><th>Run</th><th>Created</th><th>Journeys</th><th>Conversions</th><th>Model</th></tr></thead><tbody></tbody></table>
+    </div>
+  </div>
+
+<script>
+let attrChart, budgetChart;
+
+async function loadRuns() {
+  const res = await fetch('/api/runs');
+  const runs = await res.json();
+  const tbody = document.querySelector('#runsTable tbody');
+  tbody.innerHTML = '';
+  for (const r of runs) {
+    tbody.innerHTML += `<tr><td>#${r.id}</td><td>${r.created_at.slice(0,19)}</td><td>${r.n_journeys}</td><td>${r.n_conversions}</td><td>${r.primary_model}</td></tr>`;
+  }
+}
+
+function renderAttribution(attribution) {
+  const models = Object.keys(attribution);
+  const channels = Object.keys(attribution[models[0]]);
+  const datasets = models.map((m, i) => ({
+    label: m,
+    data: channels.map(ch => attribution[m][ch]),
+    backgroundColor: `hsl(${i * 65}, 65%, 55%)`,
+  }));
+  if (attrChart) attrChart.destroy();
+  attrChart = new Chart(document.getElementById('attrChart'), {
+    type: 'bar',
+    data: { labels: channels, datasets },
+    options: { responsive: true, scales: { y: { beginAtZero: true } } },
+  });
+}
+
+function renderBudget(rows) {
+  const channels = rows.map(r => r.channel);
+  if (budgetChart) budgetChart.destroy();
+  budgetChart = new Chart(document.getElementById('budgetChart'), {
+    type: 'bar',
+    data: {
+      labels: channels,
+      datasets: [
+        { label: 'Current spend', data: rows.map(r => r.current_spend), backgroundColor: '#94a3b8' },
+        { label: 'Recommended spend', data: rows.map(r => r.recommended_spend), backgroundColor: '#2563eb' },
+      ],
+    },
+    options: { responsive: true, scales: { y: { beginAtZero: true } } },
+  });
+}
+
+function renderScenario(scenario) {
+  const tbody = document.querySelector('#scenarioTable tbody');
+  tbody.innerHTML = '';
+  if (!scenario) return;
+  for (const key of ['current', 'recommended', 'improvement']) {
+    const s = scenario[key];
+    tbody.innerHTML += `<tr><td>${key}</td><td>${s.p10.toFixed(1)}</td><td>${s.median.toFixed(1)}</td><td>${s.mean.toFixed(1)}</td><td>${s.p90.toFixed(1)}</td></tr>`;
+  }
+}
+
+async function runPipeline() {
+  document.getElementById('status').innerText = 'Running...';
+  const res = await fetch('/api/run', { method: 'POST' });
+  const result = await res.json();
+  document.getElementById('status').innerText = `Done — run #${result.run_id}`;
+  renderAttribution(result.attribution);
+  renderBudget(result.budget_recommendation);
+  renderScenario(result.scenario);
+  document.getElementById('narrative').innerText = result.narrative;
+  loadRuns();
+}
+
+loadRuns();
+</script>
+</body>
+</html>
