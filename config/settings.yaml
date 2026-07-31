@@ -1,0 +1,10 @@
+data:
+  touchpoints_path: sample_data/touchpoints.csv
+  spend_path: sample_data/spend.csv
+  db_path: attribution.db
+
+model:
+  primary_attribution_model: markov_removal_effect   # last_touch | linear | time_decay | markov_removal_effect | shapley_value
+  current_saturation: 0.6                            # assumed fraction of ceiling each channel is at today
+  monte_carlo_sims: 5000
+  budget_multiplier: 1.0                             # 1.0 = pure reallocation of existing budget
